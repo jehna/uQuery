@@ -7,12 +7,12 @@ public class uQuery extends Array {
 	public var context : UnityEngine.Component;
 	public var rquickExpr : String = "^(?:#([\\w-]+)|(\\w+)|.([\\w-]+))$";
 	
-	public function jQuery(selector : System.Object) {
+	public function uQuery(selector : System.Object) {
 		this(selector, null);
 	}
 	
 	// As originally init()
-	public function jQuery(selector : System.Object, context : System.Object) {
+	public function uQuery(selector : System.Object, context : System.Object) {
 		// Init array itself
 		//super();
 		if ( !selector ) {
@@ -35,7 +35,7 @@ public class uQuery extends Array {
 		
 			// Context == jQuery
 			if( context.GetType() == this.GetType() ) {
-				this.context = (selector as jQuery).context;
+				this.context = (selector as uQuery).context;
 			
 			// Context == MonoBehaviour
 			} else if( context.GetType().IsSubclassOf(Component) ) {
