@@ -2,6 +2,7 @@
 
 import System.Text.RegularExpressions;
 import System.Collections.Generic;
+import System.Reflection;
 
 public class uQuery extends Array {
 
@@ -203,22 +204,60 @@ public class uQuery extends Array {
 	//
 	// @TODO: Callbacks for animations
 	//
-	public function animate( attr : String, porp : String, from : float, to: float, speed : float , callback : Function ) {
-		var a : AnimationClip = new AnimationClip();
-		switch(attr.ToLower()) {
-			case "color":
-				a.SetCurve("", GUITexture, "m_Color." + porp, new AnimationCurve.Linear(0,from,speed,to));
-				a.SetCurve("", Material, "_Color." + porp, new AnimationCurve.Linear(0,from,speed,to));
-				break;
-		}
-		
+	public function animate( attr : String, prop : String, from : float, to: float, speed : float , callback : Function ) {
 		return this.each(function(_, ctx : Component) {
+		
+			var a : AnimationClip = new AnimationClip();
+			var affects : UnityEngine.Object[];
+			switch(attr.ToLower()) {
+				case "color":
+					a.SetCurve("", GUITexture, "m_Color." + prop, new AnimationCurve.Linear(0,from,speed,to));
+					a.SetCurve("", Material, "_Color." + prop, new AnimationCurve.Linear(0,from,speed,to));
+					affects = [ctx.guiTexture as UnityEngine.Object, ctx.renderer as UnityEngine.Object];
+					break;
+				case "scale":
+					affects = [];
+					//a.SetCurve("", GUITexture, "m_Color." + prop, new AnimationCurve.Linear(0,from,speed,to));
+					a.SetCurve("", Transform, "localScale." + prop, new AnimationCurve.Linear(0,from,speed,to));
+			}
+			var tmpName : String = "anim" + Time.realtimeSinceStartup;
+			
+			var cb : AnimationEvent = new AnimationEvent();
+			cb.messageOptions = SendMessageOptions.DontRequireReceiver;
+			cb.functionName = "AnimationEnded";
+			cb.time = speed;
+			cb.stringParameter = tmpName;
+			a.AddEvent(cb);
+			
+			var start : AnimationEvent = new AnimationEvent();
+			start.functionName = "AnimationStarted";
+			start.time = 0;
+			a.AddEvent(start);
+		
 			var anim : Animation = ctx.animation;
 			if(anim == null) anim = ctx.gameObject.AddComponent.<Animation>();
-			var tmpName : String = "anim" + Time.realtimeSinceStartup;
 			anim.AddClip(a, tmpName);
 			anim.PlayQueued(tmpName);
 			anim.Play();
+			
+			var cbHolder : AnimationCallback = ctx.gameObject.AddComponent.<AnimationCallback>();
+			cbHolder.caller = tmpName;
+			cbHolder.holdCallerAlive = this;
+			cbHolder.callback = callback;
+			cbHolder.affects = affects;
+			cbHolder.setAnimationValues = function() {
+				switch(attr.ToLower()) {
+					case "scale":
+						for(var fill : String in ["x", "y", "z"]) {
+							if(fill == prop) return;
+							var val : float = parseFloat(uQuery(ctx.transform).attr(fill, "localScale").ToString());
+							anim.GetClip(tmpName).SetCurve("", Transform, "localScale." + fill, new AnimationCurve.Linear(0,val,speed,val));
+							//Debug.Log(fill + " = " + );
+						}
+						break;
+				}
+				
+			};
 		});
 	}
 	
@@ -228,6 +267,14 @@ public class uQuery extends Array {
 	
 	public function fadeOut() {
 		return this.animate( "color", "a", 1.0, 0.0, 3.0, function(_) { this.hide(); });
+	}
+	
+	public function slideOut() {
+		return this.animate( "scale", "y", 1.0, 0.0, 3.0, function(_) { this.show(); });
+	}
+	
+	public function slideIn() {
+		return this.animate( "scale", "y", 0.0, 1.0, 3.0, function(_) { this.show(); });
 	}
 	
 	public function toggleVisible(visibility : boolean) {
@@ -261,5 +308,62 @@ public class uQuery extends Array {
 	
 	public function children() : uQuery {
 		return uQuery(".Transform", context);
+	}
+	
+	public function attr(property : String, value : Object) {
+		var e : PropertyInfo = context.GetType().GetProperty(property);
+		if(e != null) {
+			e.SetValue(context, value, null);
+		}
+	}
+	
+	public function attr(property : String) {
+		var e : PropertyInfo = context.GetType().GetProperty(property);
+		if(e != null) {
+			return e.GetValue(context, null);
+		}
+		return null;
+	}
+	
+	public function attr(property : String, holder : String) {
+		var e1 : PropertyInfo = context.GetType().GetProperty(holder);
+		if(e1 != null) {
+			var holderObj : Object = e1.GetValue(context, null);
+			var e2 : FieldInfo = holderObj.GetType().GetField(property);
+			if(e2 != null) {
+				return e2.GetValue(holderObj);
+			}
+		}
+		return null;		
+	}
+}
+
+public class AnimationCallback extends MonoBehaviour {
+	
+	public var setAnimationValues : Function;
+	public var callback : Function;
+	public var caller : Object;
+	public var holdCallerAlive : uQuery;
+	public var affects : UnityEngine.Object[];
+	
+	public function Awake() {
+		this.hideFlags = HideFlags.HideAndDontSave;
+	}
+	
+	public function AnimationStarted() : void {
+		for(var a : UnityEngine.Object in affects) {
+			if(a != null) {
+				uQuery(a).attr("enabled", true);
+			}
+		}
+		if(setAnimationValues != null) setAnimationValues();
+	}
+	
+	public function AnimationEnded(called : String) : void {
+		if(called != caller) return;
+		if(callback != null) callback(holdCallerAlive);
+		animation.RemoveClip(called);
+		if(animation.GetClipCount() == 0) Destroy(animation);
+		Destroy(this);
 	}
 }
