@@ -200,9 +200,17 @@ public class uQuery extends Array {
 		return ctx.gameObject.GetComponent(className) != null;
 	}
 	
-	// We'll use Unity's own animations
-	//
-	// @TODO: Callbacks for animations
+	// We'll use Unity's own animations.
+	// 
+	// @NOTE:
+	// Propably will be changed to something like
+	// http://prime31.github.com/GoKit/
+	// because animations don't allow us to
+	// fade from current state but only from
+	// fixed states.
+	// Another approach would be to dynamically
+	// generate animations just before they are
+	// fired.
 	//
 	public function animate( attr : String, prop : String, from : float, to: float, speed : float , callback : Function ) {
 		return this.each(function(_, ctx : Component) {
@@ -336,6 +344,56 @@ public class uQuery extends Array {
 		}
 		return null;		
 	}
+	
+	// Basic bahviour of callbacks
+	// 
+	// @TODO: Pass data with callback
+	//
+	public function bind(property : String, callback : Function) {
+		return this.each(function(_, ctx : Component) {
+			var event : uQueryEvent = ctx.gameObject.GetComponent.<uQueryEvent>();
+			if(event == null) event = ctx.gameObject.AddComponent.<uQueryEvent>();
+			event.add(property, callback);
+		});
+	}
+	
+	public function trigger(property : String) {
+		return this.each(function(_, ctx : Component) {
+			var event : uQueryEvent = ctx.gameObject.GetComponent.<uQueryEvent>();
+			if(event == null) return;
+			event.trigger(property);
+		});
+	}
+	
+	// Shorthands for callbacks
+	//
+	public function click(callback : Function) {
+		return this.bind("click", callback);
+	}
+	
+	public function mousedown(callback : Function) {
+		return this.bind("mousedown", callback);
+	}
+	
+	public function mouseup(callback : Function) {
+		return this.bind("mouseup", callback);
+	}
+	
+	public function mouseenter(callback : Function) {
+		return this.bind("mouseenter", callback);
+	}
+	
+	public function mouseleave(callback : Function) {
+		return this.bind("mouseleave", callback);
+	}
+	
+	public function mouseout(callback : Function) {
+		return this.bind("mouseleave", callback);
+	}
+	
+	public function mouseover(callback : Function) {
+		return this.bind("mouseover", callback);
+	}
 }
 
 public class AnimationCallback extends MonoBehaviour {
@@ -366,4 +424,93 @@ public class AnimationCallback extends MonoBehaviour {
 		if(animation.GetClipCount() == 0) Destroy(animation);
 		Destroy(this);
 	}
+}
+
+public class uQueryEvent extends MonoBehaviour {
+	
+	private var handlers : Dictionary.<String, Array> = new Dictionary.<String, Array>();
+	
+	public function Awake() {
+		this.hideFlags = HideFlags.HideAndDontSave;
+	}
+	
+	public function add(types : String, handler : Function) {
+		for(var type : String in types.Split(" "[0])) {
+			var currHandler : Array;
+			try {
+				currHandler = handlers[type];
+			} catch(e) {
+				handlers[type] = currHandler = new Array();
+				currHandler.Push(handler);
+			}
+		}
+	}
+	
+	public function remove(types : String, handler : Function) {
+		for(var type : String in types.Split(" "[0])) {
+			var currHandler : Array = handlers[type];
+			if(currHandler == null) continue;
+			
+			// if no handler provided, clear all
+			if(handler != null) {
+				handlers['type'] = new Array();
+			} else {
+				for( var i : int = 0; i < currHandler.length; i++ ) {
+					if(currHandler[i] != null && currHandler[i] == handler) currHandler.Splice(i, 1);
+				}
+			}
+		}		
+	}
+	
+	public function trigger(eventType : String) {
+		var currHandlers : Array;
+		try {
+			currHandlers = handlers[eventType];
+		} catch(e) {
+			return;
+		}
+		
+		for(var f : Function in currHandlers.ToBuiltin(Function) as Function[]) {
+			if(f != null) f(this);
+		}
+	}
+	
+	public function Update() {
+		trigger("update");
+	}
+	
+	public function LateUpdate() {
+		trigger("lateupdate");
+	}
+	
+	public function FixedUpdate() {
+		trigger("fixedupdate");
+	}
+	
+	public function OnMouseEnter() {
+		trigger("mouseenter");
+	}
+	
+	public function OnMouseOver() {
+		trigger("mouseover");
+	}
+	
+	public function OnMouseExit() {
+		trigger("mouseout");
+	}
+	
+	public function OnMouseDown() {
+		trigger("mousedown");
+	}
+	
+	public function OnMouseUp() {
+		trigger("mouseup");
+	}
+	
+	public function OnMouseUpAsButton() {
+		trigger("click");
+	}
+	
+	// TODO: Collision triggers
+	// TODO: keyboard click triggers
 }
