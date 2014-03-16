@@ -5,15 +5,15 @@ import System.Collections.Generic;
 import System.Reflection;
 
 public class uQuery extends Array {
-
+    
 	public var context : UnityEngine.Component;
 	public var rquickExpr : String = "^(?:#([\\w-]+)|(\\w+)|.([\\w-]+))$";
 	private var renderer : Component = null;
-
+	
 	public function uQuery(selector : System.Object) {
 		this(selector, null);
 	}
-
+	
 	// As originally init()
 	public function uQuery(selector : System.Object, context : System.Object) {
 		// Init array itself
@@ -21,7 +21,7 @@ public class uQuery extends Array {
 		if ( !selector ) {
 			return;
 		}
-
+	
 		// Handle jQuery(MonoBehaviour)
 		if( selector.GetType().IsSubclassOf(Component) ) {
 			this[0] = this.context = selector as UnityEngine.Component;
@@ -32,50 +32,51 @@ public class uQuery extends Array {
 			this[0] = this.context = (selector as GameObject).transform;
 			return;
 		}
-
+	
 		// check different contexts
 		if(context != null) {
-
+	
 			// Context == jQuery
 			if( context.GetType() == this.GetType() ) {
 				this.context = (selector as uQuery).context;
-
+	
 			// Context == MonoBehaviour
 			} else if( context.GetType().IsSubclassOf(Component) ) {
 				this.context = context as Component;
-
+	
 			// Context == GameObject
 			} else if( context.GetType().IsSubclassOf(Component) ) {
 				this.context = (context as GameObject).transform;
 			}
 		}
-
+	
 		// Handle HTML strings
 		if ( selector.GetType() == System.String ) {
 			// If we had id-kind-of-fast selector, we could do "^(#([\\w-]*)$)" match here.
 			// But since we don't we just skip and find whatever we want
-
+	
 			// todo: handle if we have context
 			//if(context) super(context);
-
+	
 			this.Find(selector.ToString());
 		}
 	}
-
+	
+	
 	public function Find(selector : String) {
-
+	
 		var match : System.Text.RegularExpressions.Match = Regex.Match(selector, rquickExpr);
-
+	
 		var i : int = 0;
 		var a : Array = new Array();
 		if(match.Success) {
-
+	
 			// #ID
 			if(match.Groups[1].Value) {
 				var path : String = this.GetAbsolutePathFrom(context);
 				var foundGO : GameObject = GameObject.Find(path + match.Groups[1].Value);
 				if(foundGO != null) a.Push(foundGO.transform);
-
+	
 			// TAG
 			} else if(match.Groups[2].Value) {
 				var gameObjectsWithTag : GameObject[] = GameObject.FindGameObjectsWithTag(match.Groups[2].Value);
@@ -91,7 +92,7 @@ public class uQuery extends Array {
 						a.Push(gameObjectsWithTag[i++].transform);
 					}
 				}
-
+	
 			// .CLASS
 			} else if(match.Groups[3].Value) {
 				var type : System.Type = System.Type.GetType(match.Groups[3].Value);
@@ -105,24 +106,38 @@ public class uQuery extends Array {
 					if(context != null) a = context.GetComponentsInChildren(type);
 					else a = UnityEngine.Object.FindSceneObjectsOfType(type);
 				}
-
+	
 			}
-
+	
 		}
-
+	
 		for(i = 0; i < a.length; ) {
 			this[i] = a[i++];
 		}
-
+	
 	}
-
+	
+	// Helper for getting unity object's paths
+	public function GetAbsolutePathFrom(target : Component) : String {
+		if(target == null) return "";
+	
+		var ret : String = "";
+		var curr : Transform = target.transform;
+		while(curr.parent != null) {
+			ret += curr.name + "/";
+		}
+		ret = "/" + ret;
+	
+		return ret;
+	}
+	
 	public function each( /*obj : System.Object,*/ callback : Function ) {
 		var isObj : boolean = !this.GetType().IsSubclassOf(Array);
 		var i : int = 0;
-
+	
 		if( isObj ) {
 			// Confusing, in which case we would have an object?
-
+	
 		} else {
 			for( ; i < this.length; ) {
 				//(this[i++] as System.Object).call(callback);
@@ -131,87 +146,39 @@ public class uQuery extends Array {
 		}
 		return this;
 	}
-
-	// Helper for getting unity object's paths
-	public function GetAbsolutePathFrom(target : Component) : String {
-		if(target == null) return "";
-
-		var ret : String = "";
-		var curr : Transform = target.transform;
-		while(curr.parent != null) {
-			ret += curr.name + "/";
+	
+	public function isVisble() : boolean {
+		
+		var ret : boolean = false;
+		
+		if(context.renderer) {
+			ret = context.renderer.enabled;
 		}
-		ret = "/" + ret;
-
+		if(context.guiTexture) {
+			ret = ret || context.guiTexture.enabled;
+		}
+		
 		return ret;
 	}
-
-	// Show and hide functions
-	public function hide() {
-		return this.each(function(_, ctx : Component) {
-			if(ctx == null) return;
-			
-			uQuery(ctx).children().each(function(_, ctx) {
-				if(ctx != null) uQuery(ctx).toggleVisible(false);
-			});
-			
-		});
-	}
-
-	public function show() {
-		return this.each(function(_, ctx : Component) {
-			if(ctx == null) return;
-			
-			uQuery(ctx).children().each(function(_, ctx) {
-				if(ctx != null) uQuery(ctx).toggleVisible(true);
-			});
-		});
-	}
-
-	public function addClass(className : String) {
-		return this.each(function(_, ctx : Component) {
-			if(ctx == null) return;
-			ctx.gameObject.AddComponent(className);
-		});
-	}
-
-	public function removeClass(className : String) {
-		return this.each(function(_, ctx : Component) {
-			if(ctx == null) return;
-			UnityEngine.Object.Destroy(ctx.gameObject.GetComponent(className));
-		});
-	}
-
-	public function toggleClass(className : String) {
-		return this.each(function(_, ctx : Component) {
-			if(ctx == null) return;
-			var c : Component = ctx.gameObject.GetComponent(className);
-			if(c == null) ctx.gameObject.AddComponent(className);
-			else UnityEngine.Object.Destroy(c);
-		});
-	}
-
-	public function hasClass(className : String) : boolean {
-		var ctx : Component = context;
-		if(ctx == null && this.length > 0) {
-			ctx = this[0] as Component;
-		}
-		if(ctx == null) return false;
-		return ctx.gameObject.GetComponent(className) != null;
+	
+	public function children() : uQuery {
+		return uQuery(".Transform", context);
 	}
 	
-	// We'll use Unity's own animations.
-	// 
-	// @NOTE:
-	// Propably will be changed to something like
-	// http://prime31.github.com/GoKit/
-	// because animations don't allow us to
-	// fade from current state but only from
-	// fixed states.
-	// Another approach would be to dynamically
-	// generate animations just before they are
-	// fired.
-	//
+	/**
+	 * We'll use Unity's own animations.
+	 *
+	 * @NOTE:
+	 * Propably will be changed to something like
+	 * http://prime31.github.com/GoKit/
+	 * because animations don't allow us to
+	 * fade from current state but only from
+	 * fixed states.
+	 * Another approach would be to dynamically
+	 * generate animations just before they are
+	 * fired.
+	 */
+	
 	public function animate( attr : String, prop : String, from : float, to: float, speed : float , callback : Function ) {
 		return this.each(function(_, ctx : Component) {
 		
@@ -269,20 +236,26 @@ public class uQuery extends Array {
 		});
 	}
 	
-	public function fadeIn() {
-		return this.animate( "color", "a", 0.0, 1.0, 3.0, function(_) { this.show(); }); 
+	// Show and hide functions
+	public function hide() {
+		return this.each(function(_, ctx : Component) {
+			if(ctx == null) return;
+			
+			uQuery(ctx).children().each(function(_, ctx) {
+				if(ctx != null) uQuery(ctx).toggleVisible(false);
+			});
+			
+		});
 	}
 	
-	public function fadeOut() {
-		return this.animate( "color", "a", 1.0, 0.0, 3.0, function(_) { this.hide(); });
-	}
-	
-	public function slideOut() {
-		return this.animate( "scale", "y", 1.0, 0.0, 3.0, function(_) { this.show(); });
-	}
-	
-	public function slideIn() {
-		return this.animate( "scale", "y", 0.0, 1.0, 3.0, function(_) { this.show(); });
+	public function show() {
+		return this.each(function(_, ctx : Component) {
+			if(ctx == null) return;
+			
+			uQuery(ctx).children().each(function(_, ctx) {
+				if(ctx != null) uQuery(ctx).toggleVisible(true);
+			});
+		});
 	}
 	
 	public function toggleVisible(visibility : boolean) {
@@ -300,49 +273,20 @@ public class uQuery extends Array {
 		this.toggleVisible(!this.isVisble());
 	}
 	
-	public function isVisble() : boolean {
-		
-		var ret : boolean = false;
-		
-		if(context.renderer) {
-			ret = context.renderer.enabled;
-		}
-		if(context.guiTexture) {
-			ret = ret || context.guiTexture.enabled;
-		}
-		
-		return ret;
+	public function fadeIn() {
+		return this.animate( "color", "a", 0.0, 1.0, 3.0, function(_) { this.show(); }); 
 	}
 	
-	public function children() : uQuery {
-		return uQuery(".Transform", context);
+	public function fadeOut() {
+		return this.animate( "color", "a", 1.0, 0.0, 3.0, function(_) { this.hide(); });
 	}
 	
-	public function attr(property : String, value : Object) {
-		var e : PropertyInfo = context.GetType().GetProperty(property);
-		if(e != null) {
-			e.SetValue(context, value, null);
-		}
+	public function slideOut() {
+		return this.animate( "scale", "y", 1.0, 0.0, 3.0, function(_) { this.show(); });
 	}
 	
-	public function attr(property : String) {
-		var e : PropertyInfo = context.GetType().GetProperty(property);
-		if(e != null) {
-			return e.GetValue(context, null);
-		}
-		return null;
-	}
-	
-	public function attr(property : String, holder : String) {
-		var e1 : PropertyInfo = context.GetType().GetProperty(holder);
-		if(e1 != null) {
-			var holderObj : Object = e1.GetValue(context, null);
-			var e2 : FieldInfo = holderObj.GetType().GetField(property);
-			if(e2 != null) {
-				return e2.GetValue(holderObj);
-			}
-		}
-		return null;		
+	public function slideIn() {
+		return this.animate( "scale", "y", 0.0, 1.0, 3.0, function(_) { this.show(); });
 	}
 	
 	// Basic bahviour of callbacks
@@ -394,6 +338,66 @@ public class uQuery extends Array {
 	public function mouseover(callback : Function) {
 		return this.bind("mouseover", callback);
 	}
+	
+	public function attr(property : String, value : Object) {
+		var e : PropertyInfo = context.GetType().GetProperty(property);
+		if(e != null) {
+			e.SetValue(context, value, null);
+		}
+	}
+	
+	public function attr(property : String) {
+		var e : PropertyInfo = context.GetType().GetProperty(property);
+		if(e != null) {
+			return e.GetValue(context, null);
+		}
+		return null;
+	}
+	
+	public function attr(property : String, holder : String) {
+		var e1 : PropertyInfo = context.GetType().GetProperty(holder);
+		if(e1 != null) {
+			var holderObj : Object = e1.GetValue(context, null);
+			var e2 : FieldInfo = holderObj.GetType().GetField(property);
+			if(e2 != null) {
+				return e2.GetValue(holderObj);
+			}
+		}
+		return null;
+	}
+	
+	public function addClass(className : String) {
+		return this.each(function(_, ctx : Component) {
+			if(ctx == null) return;
+			ctx.gameObject.AddComponent(className);
+		});
+	}
+	
+	public function removeClass(className : String) {
+		return this.each(function(_, ctx : Component) {
+			if(ctx == null) return;
+			UnityEngine.Object.Destroy(ctx.gameObject.GetComponent(className));
+		});
+	}
+	
+	public function toggleClass(className : String) {
+		return this.each(function(_, ctx : Component) {
+			if(ctx == null) return;
+			var c : Component = ctx.gameObject.GetComponent(className);
+			if(c == null) ctx.gameObject.AddComponent(className);
+			else UnityEngine.Object.Destroy(c);
+		});
+	}
+	
+	public function hasClass(className : String) : boolean {
+		var ctx : Component = context;
+		if(ctx == null && this.length > 0) {
+			ctx = this[0] as Component;
+		}
+		if(ctx == null) return false;
+		return ctx.gameObject.GetComponent(className) != null;
+	}
+
 }
 
 public class AnimationCallback extends MonoBehaviour {
