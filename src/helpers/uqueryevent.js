@@ -68,7 +68,7 @@ public class uQueryEvent extends MonoBehaviour {
 	}
 	
 	public function OnMouseExit() {
-		trigger("mouseout");
+		trigger("mouseleave");
 	}
 	
 	public function OnMouseDown() {
