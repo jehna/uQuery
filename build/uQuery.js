@@ -104,7 +104,7 @@ public class uQuery extends Array {
 				
 				if(type != null) {
 					if(context != null) a = context.GetComponentsInChildren(type);
-					else a = UnityEngine.Object.FindSceneObjectsOfType(type);
+					else a = UnityEngine.Object.FindObjectsOfType(type);
 				}
 	
 			}
@@ -164,6 +164,125 @@ public class uQuery extends Array {
 	public function children() : uQuery {
 		return uQuery(".Transform", context);
 	}
+	
+	public static function ajax(url : String) : uQueryXHR {
+	    return uQuery.ajax(url, null);
+	}
+	
+	public static function ajax(settings : Boo.Lang.Hash) : uQueryXHR {
+	    return uQuery.ajax(settings["url"] as String, settings);
+	}
+	
+	public static function ajax(url : String, settings : Boo.Lang.Hash) : uQueryXHR {
+	    var xhr : uQueryXHR = new uQueryXHR();
+	    var form : WWWForm = new WWWForm();
+	    xhr.headers = form.headers;
+	    xhr.form = form;
+	    
+	    xhr.url = url;
+	    
+	    if ( settings['beforeSend'] != null ) {
+	        xhr.beforeSend = settings['beforeSend'] as Function;
+	    }
+	    
+	    if( settings['cache'] == false ) {
+	        xhr.cache = false;
+	    }
+	    
+	    if ( settings['complete'] != null ) {
+	        xhr.complete = settings['complete'] as Function;
+	    }
+	    
+	    if ( settings['contentType'] != null ) {
+	        xhr.headers['Content-Type'] = settings['contentType'];
+	    }
+	    
+	    if ( settings['data'] != null ) {
+	        if ( settings['data'].GetType() == Boo.Lang.Hash ) {
+	            xhr.data = settings['data'] as Boo.Lang.Hash;
+	        }
+	    }
+	    
+	    if ( settings['error'] != null ) {
+	        xhr.error = settings['error'] as Function;
+	    }
+	    
+	    if ( settings['headers'] != null ) {
+	        for( var entry : System.Collections.DictionaryEntry in settings['headers'] as System.Collections.DictionaryEntry[] ) {
+	            xhr.headers.Add(entry.Key.ToString(), entry.Value.ToString());
+	        }
+	    }
+	    
+	    if ( settings['success'] != null ) {
+	        xhr.success = settings['success'] as function(String, uQueryXHR);
+	    }
+	    
+	    if ( settings['type'] != null ) {
+	        xhr.type = settings['type'].ToString();
+	    }
+	    
+	    if ( settings['username'] != null && settings['password'] != null ) {
+	        xhr.headers.Add("Authorization", "Basic " + System.Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(settings['username'] + ":" + settings['password'] )));
+	    }
+	    
+	    xhr.run();
+	    return xhr;
+	    
+	}
+	
+	/* GET */
+	
+	// Todo: Find a way to use uQuery.get (on lowercase).
+	public static function Get(url : String) {
+	    Get(url, {});
+	}
+	
+	public static function Get(url : String, data : Boo.Lang.Hash) {
+	    Get(url, data, null);
+	}
+	
+	public static function Get(url : String, success : function(String, uQueryXHR)) {
+	    Get(url, null, success);
+	}
+	
+	public static function Get(url : String, data : Boo.Lang.Hash, success : function(String, uQueryXHR)) {
+	    Get(url, data, success, null);
+	}
+	
+	public static function Get(url : String, data : Boo.Lang.Hash, success : function(String, uQueryXHR), dataType : String) { 
+	    uQuery.ajax({
+	        "url": url,
+	        "data": data,
+	        "success": success,
+	        "dataType": dataType
+	    });
+	}
+	
+	
+	/* POST */
+	
+	public static function post(url : String) {
+	    post(url, {});
+	}
+	
+	public static function post(url : String, data : Boo.Lang.Hash) {
+	    post(url, data, null);
+	}
+	
+	public static function post(url : String, data : Boo.Lang.Hash, success : function(String, uQueryXHR)) {
+	    post(url, data, success, null);
+	}
+	
+	public static function post(url : String, data : Boo.Lang.Hash, success : function(String, uQueryXHR), dataType : String) { 
+	    uQuery.ajax({
+	        "type": "POST",
+	        "url": url,
+	        "data": data,
+	        "success": success,
+	        "dataType": dataType
+	    });
+	}
+	
 	
 	/**
 	 * We'll use Unity's own animations.
@@ -294,6 +413,10 @@ public class uQuery extends Array {
 	// @TODO: Pass data with callback
 	//
 	public function bind(property : String, callback : Function) {
+		return this.on(property, callback);
+	}
+	
+	public function on(property : String, callback : Function) {
 		return this.each(function(_, ctx : Component) {
 			var event : uQueryEvent = ctx.gameObject.GetComponent.<uQueryEvent>();
 			if(event == null) event = ctx.gameObject.AddComponent.<uQueryEvent>();
@@ -517,4 +640,81 @@ public class uQueryEvent extends MonoBehaviour {
 	
 	// TODO: Collision triggers
 	// TODO: keyboard click triggers
+}
+
+public class uQueryXHR extends System.Object {
+	
+	// TODO: Cleanup other callbacks than success function
+	
+	public var success : function(String, uQueryXHR);
+	public var complete : Function;
+	public var error : Function;
+	public var beforeSend : Function;
+	public var form : WWWForm;
+	public var cache : boolean = true;
+	public var data : Boo.Lang.Hash;
+	public var headers : System.Collections.Hashtable;
+	public var type : String = "GET";
+	public var www : WWW;
+	public var url : String;
+	public var _always : Function;
+	public var _then : Function;
+	
+	public function done(callback : function(String, uQueryXHR)) {
+		this.success = callback;
+		return this;
+	}
+	public function fail(callback : Function) {
+		this.error = callback;
+		return this;
+	}
+	public function always(callback : Function) {
+		this._always = callback;
+		return this;
+	}
+	public function then(callback : Function) {
+		this._then = callback;
+		return this;
+	}
+	public function run() {
+		// Inject
+		(MonoBehaviour.FindObjectOfType(MonoBehaviour) as MonoBehaviour).StartCoroutine(_run());
+	}
+	
+	private function _run() {
+		if (this.type == "GET") {
+			if (!url.Contains("?")) {
+				this.url += "?";
+			}
+			
+			for( var entry : System.Collections.DictionaryEntry in this.data ) {
+				this.url += "&" + entry.Key.ToString() + "=" + entry.Value.ToString();
+			}
+			
+			if (beforeSend != null) beforeSend(this);
+			this.www = new WWW(url);
+		} else if ( this.type == "POST" ) {
+			
+			for( var entry : System.Collections.DictionaryEntry in this.data ) {
+				this.form.AddField(entry.Key.ToString(), entry.Value.ToString());
+			}
+			
+			if (beforeSend != null) beforeSend(this);
+			this.www = new WWW(this.url, this.form.data, this.headers);
+		}
+		
+		yield www;
+		
+		if(!String.IsNullOrEmpty(this.www.error)) {
+			if (this.error != null) this.error(this);
+		} else {
+			if (this.success != null) this.success(this.www.text, this);
+			if (this.complete != null) this.complete(this);
+		}
+		
+		
+		if (this._then != null) this._then(this);
+		if (this._always != null) this._always(this);
+		
+	}
 }

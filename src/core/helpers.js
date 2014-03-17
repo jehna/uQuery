@@ -39,7 +39,7 @@ public function Find(selector : String) {
 			
 			if(type != null) {
 				if(context != null) a = context.GetComponentsInChildren(type);
-				else a = UnityEngine.Object.FindSceneObjectsOfType(type);
+				else a = UnityEngine.Object.FindObjectsOfType(type);
 			}
 
 		}
