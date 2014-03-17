@@ -3,12 +3,6 @@ module.exports = function(grunt) {
   grunt.initConfig({
     pkg: grunt.file.readJSON('package.json'),
     output: 'build/uQuery.js',
-    watch: {
-      default: {
-        files: '<%= concat.append.src.join(",") %>'.split(","),
-        tasks: ['concat:append', 'wrap', 'concat:after']
-      }
-    },
     concat: {
       options: {
         separator: '\n\n'
@@ -39,6 +33,13 @@ module.exports = function(grunt) {
           wrapper: grunt.file.read("src/template.js").split("/* insert code here */"),
           indent: '\t',
         }
+      }
+    },
+    
+    watch: {
+      default: {
+        files: ['src/**/*.js', 'src/*.js'],
+        tasks: ['concat:append', 'wrap', 'concat:after']
       }
     }
   });
